@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/briandowns/spinner"
 	"github.com/spf13/cobra"
 )
 
@@ -76,6 +77,13 @@ func download() *cobra.Command {
 		Short: "Fetch and download",
 		Long:  "Fetch and download a file from given URL",
 		Run: func(cmd *cobra.Command, args []string) {
+			s := spinner.New(spinner.CharSets[26], 100*time.Millisecond)
+			s.Prefix = "Fetching url"
+			s.Suffix = "\n"
+
+			s.Start()
+			defer s.Stop()
+
 			url := args[0]
 			request := cliRequest{
 				URL: url,
@@ -87,7 +95,6 @@ func download() *cobra.Command {
 				return
 			}
 
-			fmt.Println("Fetching url...")
 			res, err := http.Post(server, "application/json", bytes.NewBuffer(payload))
 			if err != nil {
 				log.Println("Error marshalling request:", err)
@@ -106,12 +113,38 @@ func download() *cobra.Command {
 				log.Fatal("Error unmarshalling buffer:", err)
 			}
 
-			fmt.Println(result.Data.String())
+			fmt.Printf("Downloading %s (%s)\n", result.Data.Name, parseSize(result.Data.Size))
 		},
 	}
 
 	return cmd
 }
+
+func parseSize(size int64) string {
+	const KB = 1024
+	const MB = KB * KB
+	const GB = MB * KB
+
+	if size < KB {
+		return fmt.Sprintf("%.2f KB", float64(size)/float64(KB))
+	}
+
+	if size > KB && size < MB {
+		return fmt.Sprintf("%.2f KB", float64(size)/float64(KB))
+	}
+
+	if size > KB && size < GB {
+		return fmt.Sprintf("%.2f MB", float64(size)/float64(MB))
+	}
+
+	if size > GB {
+		return fmt.Sprintf("%.2f GB", float64(size)/float64(GB))
+	}
+
+	return "0 KB"
+}
+
+// TODO: add command registry
 
 func downloadWithOpen() *cobra.Command {
 	// TODO: implement this

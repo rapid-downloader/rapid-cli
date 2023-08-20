@@ -8,7 +8,8 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
-	"github.com/schollz/progressbar/v3"
+	"github.com/vbauerster/mpb"
+	"github.com/vbauerster/mpb/decor"
 )
 
 var backgrounds = make([]BackgroundFunc, 0)
@@ -52,12 +53,15 @@ type (
 		ws        *websocket.Conn
 		interrupt chan os.Signal
 		done      chan bool
-		bar       progressBar
+		progressBar
 	}
 
 	BackgroundFunc func(done chan bool, signal chan os.Signal) Background
 
 	Message struct {
+		progressBar struct {
+			wg sync.WaitGroup
+		}
 		ID         string `json:"id"`
 		Index      int    `json:"index"`
 		Downloaded int64  `json:"downloaded"`
@@ -67,34 +71,40 @@ type (
 	}
 
 	progressBar struct {
-		*sync.Mutex
-		bar map[string]*progressbar.ProgressBar
+		mpb    *mpb.Progress
+		barMap sync.Map
 	}
 )
 
-func newProgressBar() progressBar {
+func progressbar() progressBar {
 	return progressBar{
-		&sync.Mutex{},
-		make(map[string]*progressbar.ProgressBar),
+		mpb:    mpb.New(),
+		barMap: sync.Map{},
 	}
 }
 
-func (b *progressBar) update(index int, bytes int64, maxBytes int64) {
-	b.Lock()
-	defer b.Unlock()
-
+func (p *progressBar) update(index int, downloaded int64, chunkSize int64) {
 	i := fmt.Sprintf("%d", index)
 
-	if progress, ok := b.bar[i]; ok {
-		progress.Set64(bytes)
+	if val, ok := p.barMap.Load(i); ok {
+		bar := val.(*mpb.Bar)
+		bar.IncrBy(int(downloaded - bar.Current()))
 
 		return
 	}
 
-	bar := progressbar.DefaultBytes(maxBytes)
-	bar.Set64(bytes)
+	bar := p.mpb.AddBar(chunkSize,
+		mpb.PrependDecorators(
+			decor.CountersKiloByte("% .2f / % .2f"),
+		),
+		mpb.AppendDecorators(
+			decor.AverageETA(decor.ET_STYLE_MMSS),
+			decor.Name(" | "),
+			decor.AverageSpeed(decor.UnitKB, "% .2f"),
+		),
+	)
 
-	b.bar[i] = bar
+	p.barMap.Store(i, bar)
 }
 
 const ws = "ws://localhost:3333/ws/cli"
@@ -106,10 +116,10 @@ func newServerListener(done chan bool, signal chan os.Signal) Background {
 	}
 
 	return &serverListener{
-		ws:        conn,
-		interrupt: signal,
-		done:      done,
-		bar:       newProgressBar(),
+		ws:          conn,
+		interrupt:   signal,
+		done:        done,
+		progressBar: progressbar(),
 	}
 }
 
@@ -122,7 +132,6 @@ func (s *serverListener) Run() {
 			return
 		default:
 			_, message, err := s.ws.ReadMessage()
-
 			if err != nil {
 				log.Println("Error reading message:", err)
 				return
@@ -138,7 +147,7 @@ func (s *serverListener) Run() {
 				s.done <- true
 			}
 
-			s.bar.update(msg.Index, msg.Downloaded, msg.Size)
+			s.update(msg.Index, msg.Downloaded, msg.Size)
 		}
 	}
 }
