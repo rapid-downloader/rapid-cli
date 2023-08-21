@@ -15,7 +15,7 @@ func main() {
 	defer shutdown(runners)
 
 	// TODO: refactor this
-	download().Execute()
+	executeCommand(done)
 
 	waitSignal(done, interrupt)
 }

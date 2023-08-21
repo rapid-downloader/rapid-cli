@@ -50,7 +50,6 @@ type (
 	}
 
 	serverListener struct {
-		ws        *websocket.Conn
 		interrupt chan os.Signal
 		done      chan bool
 		progressBar
@@ -59,9 +58,6 @@ type (
 	BackgroundFunc func(done chan bool, signal chan os.Signal) Background
 
 	Message struct {
-		progressBar struct {
-			wg sync.WaitGroup
-		}
 		ID         string `json:"id"`
 		Index      int    `json:"index"`
 		Downloaded int64  `json:"downloaded"`
@@ -110,13 +106,7 @@ func (p *progressBar) update(index int, downloaded int64, chunkSize int64) {
 const ws = "ws://localhost:3333/ws/cli"
 
 func newServerListener(done chan bool, signal chan os.Signal) Background {
-	conn, res, err := websocket.DefaultDialer.Dial(ws, nil)
-	if err != nil {
-		log.Fatalf("Error dialing websocket: %v. Status courlde %d", err, res.StatusCode)
-	}
-
 	return &serverListener{
-		ws:          conn,
 		interrupt:   signal,
 		done:        done,
 		progressBar: progressbar(),
@@ -124,6 +114,13 @@ func newServerListener(done chan bool, signal chan os.Signal) Background {
 }
 
 func (s *serverListener) Run() {
+	conn, res, err := websocket.DefaultDialer.Dial(ws, nil)
+	if err != nil {
+		log.Fatalf("Error dialing websocket: %v. Status courlde %d", err, res.StatusCode)
+	}
+
+	defer conn.Close()
+
 	for {
 		select {
 		case <-s.done:
@@ -131,7 +128,7 @@ func (s *serverListener) Run() {
 		case <-s.interrupt:
 			return
 		default:
-			_, message, err := s.ws.ReadMessage()
+			_, message, err := conn.ReadMessage()
 			if err != nil {
 				log.Println("Error reading message:", err)
 				return
@@ -145,15 +142,12 @@ func (s *serverListener) Run() {
 
 			if msg.Done {
 				s.done <- true
+				return
 			}
 
 			s.update(msg.Index, msg.Downloaded, msg.Size)
 		}
 	}
-}
-
-func (s *serverListener) Close() {
-	s.ws.Close()
 }
 
 func init() {

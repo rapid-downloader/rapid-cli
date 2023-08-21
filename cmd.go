@@ -69,13 +69,37 @@ func (e *entry) String() string {
 	return buffer.String()
 }
 
-func download() *cobra.Command {
+var cmds = make([]commandFunc, 0)
+
+type commandFunc func(done chan bool) *cobra.Command
+
+func registerCommand(cmd commandFunc) {
+	cmds = append(cmds, cmd)
+}
+
+func executeCommand(done chan bool) {
+	rootCmd := &cobra.Command{
+		Use:   "rapid",
+		Short: "Fetch and download",
+		Long:  "Fetch and download a file from given url",
+	}
+
+	for _, command := range cmds {
+		cmd := command(done)
+		rootCmd.AddCommand(cmd)
+	}
+
+	rootCmd.Execute()
+}
+
+func download(done chan bool) *cobra.Command {
 	const server = "http://localhost:3333/download/cli"
 
 	cmd := &cobra.Command{
-		Use:   "download",
-		Short: "Fetch and download",
-		Long:  "Fetch and download a file from given URL",
+		Use:     "download",
+		Aliases: []string{"d"},
+		Example: "rapid download <url> | rapid d <url>",
+		Short:   "Download a file from the given url",
 		Run: func(cmd *cobra.Command, args []string) {
 			s := spinner.New(spinner.CharSets[26], 100*time.Millisecond)
 			s.Prefix = "Fetching url"
@@ -113,7 +137,7 @@ func download() *cobra.Command {
 				log.Fatal("Error unmarshalling buffer:", err)
 			}
 
-			fmt.Printf("Downloading %s (%s)\n", result.Data.Name, parseSize(result.Data.Size))
+			fmt.Printf("Downloading %s (%s)\n\n\n", result.Data.Name, parseSize(result.Data.Size))
 		},
 	}
 
@@ -146,7 +170,25 @@ func parseSize(size int64) string {
 
 // TODO: add command registry
 
-func downloadWithOpen() *cobra.Command {
-	// TODO: implement this
-	return nil
+func downloadWithOpen(done chan bool) *cobra.Command {
+	// const server = "http://localhost:3333/download/cli"
+
+	cmd := &cobra.Command{
+		Use:     "open",
+		Aliases: []string{"o"},
+		Example: "rapid open <url> | rapid o <url>",
+		Short:   "Download a file from the given URL using GUI",
+		Run: func(cmd *cobra.Command, args []string) {
+			// TODO: implement this
+
+			done <- true
+		},
+	}
+
+	return cmd
+}
+
+func init() {
+	registerCommand(downloadWithOpen)
+	registerCommand(download)
 }
