@@ -20,12 +20,12 @@ func main() {
 	waitSignal(done, interrupt)
 }
 
-func waitSignal(done chan bool, signal chan os.Signal) {
+func waitSignal(done chan bool, interrupt chan os.Signal) {
 	for {
 		select {
 		case <-done:
 			return
-		case <-signal:
+		case <-interrupt:
 			return
 		}
 	}

@@ -103,8 +103,6 @@ func (p *progressBar) update(index int, downloaded int64, chunkSize int64) {
 	p.barMap.Store(i, bar)
 }
 
-const ws = "ws://localhost:3333/ws/cli"
-
 func newServerListener(done chan bool, signal chan os.Signal) Background {
 	return &serverListener{
 		interrupt:   signal,
@@ -112,6 +110,8 @@ func newServerListener(done chan bool, signal chan os.Signal) Background {
 		progressBar: progressbar(),
 	}
 }
+
+const ws = "ws://localhost:3333/ws/cli"
 
 func (s *serverListener) Run() {
 	conn, res, err := websocket.DefaultDialer.Dial(ws, nil)

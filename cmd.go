@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -13,10 +14,6 @@ import (
 )
 
 type (
-	cliRequest struct {
-		URL string `json:"url"`
-	}
-
 	cookie struct {
 		Name     string    `json:"name"`
 		Value    string    `json:"value"`
@@ -28,11 +25,13 @@ type (
 		SameSite string    `json:"sameSite"`
 	}
 
-	openRequest struct {
+	cliRequest struct {
 		Url         string   `json:"url"`
+		Client      string   `json:"client"`
+		Provider    string   `json:"provider"`
 		ContentType string   `json:"contentType"`
 		UserAgent   string   `json:"userAgent"`
-		cookies     []cookie `json:"cookies"`
+		Cookies     []cookie `json:"cookies"`
 	}
 
 	cliResponse struct {
@@ -93,7 +92,8 @@ func executeCommand(done chan bool) {
 }
 
 func download(done chan bool) *cobra.Command {
-	const server = "http://localhost:3333/download/cli"
+	const fetch = "http://localhost:3333/fetch"
+	const download = "http://localhost:3333/cli/download/%s"
 
 	cmd := &cobra.Command{
 		Use:     "download",
@@ -110,7 +110,7 @@ func download(done chan bool) *cobra.Command {
 
 			url := args[0]
 			request := cliRequest{
-				URL: url,
+				Url: url,
 			}
 
 			payload, err := json.Marshal(request)
@@ -119,7 +119,7 @@ func download(done chan bool) *cobra.Command {
 				return
 			}
 
-			res, err := http.Post(server, "application/json", bytes.NewBuffer(payload))
+			res, err := http.Post(fetch, "application/json", bytes.NewBuffer(payload))
 			if err != nil {
 				log.Println("Error marshalling request:", err)
 				return
@@ -137,7 +137,14 @@ func download(done chan bool) *cobra.Command {
 				log.Fatal("Error unmarshalling buffer:", err)
 			}
 
-			fmt.Printf("Downloading %s (%s)\n\n\n", result.Data.Name, parseSize(result.Data.Size))
+			fmt.Printf("Downloading %s (%s)\n\n\n", filepath.Base(result.Data.Location), parseSize(result.Data.Size))
+			req, err := http.Get(fmt.Sprintf(download, result.Data.Id))
+			if err != nil {
+				log.Println("Error creating request:", err)
+				return
+			}
+
+			req.Body.Close()
 		},
 	}
 
