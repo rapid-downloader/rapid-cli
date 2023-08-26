@@ -1,10 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -18,11 +18,11 @@ func registerBackground(r BackgroundFunc) {
 	backgrounds = append(backgrounds, r)
 }
 
-func create(done chan bool, signal chan os.Signal) []Background {
+func create(ctx context.Context) []Background {
 	bgs := make([]Background, len(backgrounds))
 
 	for _, background := range backgrounds {
-		r := background(done, signal)
+		r := background(ctx)
 
 		bgs = append(bgs, r)
 
@@ -50,12 +50,11 @@ type (
 	}
 
 	serverListener struct {
-		interrupt chan os.Signal
-		done      chan bool
+		ctx context.Context
 		progressBar
 	}
 
-	BackgroundFunc func(done chan bool, signal chan os.Signal) Background
+	BackgroundFunc func(ctx context.Context) Background
 
 	Message struct {
 		ID         string `json:"id"`
@@ -103,18 +102,19 @@ func (p *progressBar) update(index int, downloaded int64, chunkSize int64) {
 	p.barMap.Store(i, bar)
 }
 
-func newServerListener(done chan bool, signal chan os.Signal) Background {
+func newServerListener(ctx context.Context) Background {
 	return &serverListener{
-		interrupt:   signal,
-		done:        done,
+		ctx:         ctx,
 		progressBar: progressbar(),
 	}
 }
 
-const ws = "ws://localhost:3333/ws/cli"
+const ws = "ws://localhost:9999/ws/cli"
 
 func (s *serverListener) Run() {
-	conn, res, err := websocket.DefaultDialer.Dial(ws, nil)
+	cancel := s.ctx.Value("cancel").(context.CancelFunc)
+
+	conn, res, err := websocket.DefaultDialer.DialContext(s.ctx, ws, nil)
 	if err != nil {
 		log.Fatalf("Error dialing websocket: %v. Status courlde %d", err, res.StatusCode)
 	}
@@ -123,26 +123,24 @@ func (s *serverListener) Run() {
 
 	for {
 		select {
-		case <-s.done:
-			return
-		case <-s.interrupt:
+		case <-s.ctx.Done():
 			return
 		default:
 			_, message, err := conn.ReadMessage()
 			if err != nil {
 				log.Println("Error reading message:", err)
-				return
+				break
 			}
 
 			var msg Message
 			if err := json.Unmarshal(message, &msg); err != nil {
 				log.Println("Error unmarshalling message:", err)
-				return
+				break
 			}
 
 			if msg.Done {
-				s.done <- true
-				return
+				cancel()
+				break
 			}
 
 			s.update(msg.Index, msg.Downloaded, msg.Size)

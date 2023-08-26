@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -70,13 +71,13 @@ func (e *entry) String() string {
 
 var cmds = make([]commandFunc, 0)
 
-type commandFunc func(done chan bool) *cobra.Command
+type commandFunc func(ctx context.Context) *cobra.Command
 
 func registerCommand(cmd commandFunc) {
 	cmds = append(cmds, cmd)
 }
 
-func executeCommand(done chan bool) {
+func executeCommand(ctx context.Context) {
 	rootCmd := &cobra.Command{
 		Use:   "rapid",
 		Short: "Fetch and download",
@@ -84,16 +85,16 @@ func executeCommand(done chan bool) {
 	}
 
 	for _, command := range cmds {
-		cmd := command(done)
+		cmd := command(ctx)
 		rootCmd.AddCommand(cmd)
 	}
 
 	rootCmd.Execute()
 }
 
-func download(done chan bool) *cobra.Command {
-	const fetch = "http://localhost:3333/fetch"
-	const download = "http://localhost:3333/cli/download/%s"
+func download(ctx context.Context) *cobra.Command {
+	const fetch = "http://localhost:9999/fetch"
+	const download = "http://localhost:9999/cli/download/%s"
 
 	cmd := &cobra.Command{
 		Use:     "download",
@@ -101,6 +102,11 @@ func download(done chan bool) *cobra.Command {
 		Example: "rapid download <url> | rapid d <url>",
 		Short:   "Download a file from the given url",
 		Run: func(cmd *cobra.Command, args []string) {
+			provider, _ := cmd.Flags().GetString("provider")
+			if provider == "" {
+				provider = "default"
+			}
+
 			s := spinner.New(spinner.CharSets[26], 100*time.Millisecond)
 			s.Prefix = "Fetching url"
 			s.Suffix = "\n"
@@ -110,18 +116,27 @@ func download(done chan bool) *cobra.Command {
 
 			url := args[0]
 			request := cliRequest{
-				Url: url,
+				Url:      url,
+				Provider: provider,
 			}
 
 			payload, err := json.Marshal(request)
 			if err != nil {
-				log.Println("Error marshalling request:", err)
+				log.Fatal("Error marshalling request:", err)
 				return
 			}
 
-			res, err := http.Post(fetch, "application/json", bytes.NewBuffer(payload))
+			req, err := http.NewRequestWithContext(ctx, "POST", fetch, bytes.NewBuffer(payload))
 			if err != nil {
-				log.Println("Error marshalling request:", err)
+				log.Fatal("Error preparing fetch request:", err.Error())
+				return
+			}
+
+			req.Header.Add("Content-Type", "application/json")
+
+			res, err := http.DefaultClient.Do(req)
+			if err != nil {
+				log.Fatal("Error creating fetch request:", err)
 				return
 			}
 
@@ -130,21 +145,30 @@ func download(done chan bool) *cobra.Command {
 			var buffer bytes.Buffer
 			if _, err := buffer.ReadFrom(res.Body); err != nil {
 				log.Fatal(err)
+				return
 			}
 
 			var result cliResponse
 			if err := json.Unmarshal(buffer.Bytes(), &result); err != nil {
 				log.Fatal("Error unmarshalling buffer:", err)
-			}
-
-			fmt.Printf("Downloading %s (%s)\n\n\n", filepath.Base(result.Data.Location), parseSize(result.Data.Size))
-			req, err := http.Get(fmt.Sprintf(download, result.Data.Id))
-			if err != nil {
-				log.Println("Error creating request:", err)
 				return
 			}
 
-			req.Body.Close()
+			fmt.Printf("Downloading %s (%s)\n\n\n", filepath.Base(result.Data.Location), parseSize(result.Data.Size))
+
+			req, err = http.NewRequestWithContext(ctx, "GET", fmt.Sprintf(download, result.Data.Id), nil)
+			if err != nil {
+				log.Fatal("Error preparing download request:", err.Error())
+				return
+			}
+
+			res, err = http.DefaultClient.Do(req)
+			if err != nil {
+				log.Println("Error creating download request:", err)
+				return
+			}
+
+			res.Body.Close()
 		},
 	}
 
@@ -177,8 +201,8 @@ func parseSize(size int64) string {
 
 // TODO: add command registry
 
-func downloadWithOpen(done chan bool) *cobra.Command {
-	// const server = "http://localhost:3333/download/cli"
+func downloadWithOpen(ctx context.Context) *cobra.Command {
+	// const server = "http://localhost:9999/download/cli"
 
 	cmd := &cobra.Command{
 		Use:     "open",
@@ -188,7 +212,6 @@ func downloadWithOpen(done chan bool) *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			// TODO: implement this
 
-			done <- true
 		},
 	}
 

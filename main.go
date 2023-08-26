@@ -1,31 +1,29 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
+	"syscall"
 )
 
 func main() {
 	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
+	signal.Notify(interrupt, []os.Signal{syscall.SIGINT, syscall.SIGKILL, syscall.SIGTERM, syscall.SIGSTOP, os.Interrupt}...)
 
-	done := make(chan bool, 1)
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	ctx := context.WithValue(cancelCtx, "cancel", cancel)
 
-	runners := create(done, interrupt)
+	runners := create(ctx)
 	defer shutdown(runners)
 
-	// TODO: refactor this
-	executeCommand(done)
+	executeCommand(ctx)
 
-	waitSignal(done, interrupt)
-}
-
-func waitSignal(done chan bool, interrupt chan os.Signal) {
 	for {
 		select {
-		case <-done:
-			return
 		case <-interrupt:
+			cancel()
+		case <-ctx.Done():
 			return
 		}
 	}
