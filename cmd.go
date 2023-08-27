@@ -154,6 +154,8 @@ func download(ctx context.Context) *cobra.Command {
 				return
 			}
 
+			store(result.Data.Id, result.Data)
+
 			fmt.Printf("Downloading %s (%s)\n\n\n", filepath.Base(result.Data.Location), parseSize(result.Data.Size))
 
 			req, err = http.NewRequestWithContext(ctx, "GET", fmt.Sprintf(download, result.Data.Id), nil)

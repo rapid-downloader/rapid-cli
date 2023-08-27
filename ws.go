@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -120,6 +121,7 @@ func (s *serverListener) Run() {
 	}
 
 	defer conn.Close()
+	defer truncateStore()
 
 	for {
 		select {
@@ -146,6 +148,29 @@ func (s *serverListener) Run() {
 			s.update(msg.Index, msg.Downloaded, msg.Size)
 		}
 	}
+}
+
+func (s *serverListener) Close() {
+	const stop = "http://localhost:9999/stop/%s"
+
+	entry, ok := loadStored()
+	if !ok {
+		return
+	}
+
+	req, err := http.NewRequest("PUT", fmt.Sprintf(stop, entry.Id), nil)
+	if err != nil {
+		log.Println("Error preparing stop request:", err)
+		return
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Println("Error stopping download:", err)
+		return
+	}
+
+	res.Body.Close()
 }
 
 func init() {
