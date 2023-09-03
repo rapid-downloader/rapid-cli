@@ -23,12 +23,6 @@ type (
 		barMap sync.Map
 	}
 
-	serverListener struct {
-		ctx context.Context
-		ws  *websocket.Conn
-		progressBar
-	}
-
 	progress struct {
 		ID         string `json:"id"`
 		Index      int    `json:"index"`
