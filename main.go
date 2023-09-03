@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/vbauerster/mpb"
@@ -132,24 +131,18 @@ func main() {
 	for {
 		select {
 		case <-ctx.Done():
-			closeConn(ctx, conn)
+			stopDownload()
+			closeConn(conn)
 			return
 		case <-interrupt:
-			stopDownload()
-			closeConn(ctx, conn)
-			return
+			cancel()
 		}
 	}
 }
 
-func closeConn(ctx context.Context, conn *websocket.Conn) {
+func closeConn(conn *websocket.Conn) {
 	if err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); err != nil {
 		log.Println("Error sending close signal to server:", err)
 		return
-	}
-
-	select {
-	case <-ctx.Done():
-	case <-time.After(time.Second):
 	}
 }
