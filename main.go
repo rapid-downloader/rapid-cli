@@ -103,33 +103,52 @@ func main() {
 	executeCommand(ctx)
 
 	progressBar := progressbar()
+	onError := make(chan bool)
+	// ping := time.NewTicker(time.Second)
 
 	go func() {
 		for {
-			_, message, err := conn.ReadMessage()
-			if err != nil {
-				log.Println("Error reading message:", err)
-				break
-			}
+			select {
+			case <-onError:
+				return
+			default:
+				_, message, err := conn.ReadMessage()
+				if err != nil {
+					log.Println("Error reading message:", err)
+					return
+				}
 
-			var progress progress
-			if err := json.Unmarshal(message, &progress); err != nil {
-				log.Println("Error unmarshalling message:", err)
-				break
-			}
+				var progress progress
+				if err := json.Unmarshal(message, &progress); err != nil {
+					log.Println("Error unmarshalling message:", err)
+					return
+				}
 
-			if progress.Done {
-				truncateStore()
-				cancel()
-				break
-			}
+				if progress.Done {
+					truncateStore()
+					cancel()
+					return
+				}
 
-			progressBar.update(progress.Index, progress.Downloaded, progress.Size)
+				progressBar.update(progress.Index, progress.Downloaded, progress.Size)
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				log.Println(err.Error())
+				onError <- true
+				return
+			}
 		}
 	}()
 
 	for {
 		select {
+		case <-onError:
+			return
 		case <-ctx.Done():
 			stopDownload()
 			closeConn(conn)
