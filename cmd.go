@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -122,13 +123,15 @@ func download(ctx context.Context) *cobra.Command {
 
 			payload, err := json.Marshal(request)
 			if err != nil {
-				log.Fatal("Error marshalling request:", err)
+				fmt.Println("Error marshalling request:", err)
+				os.Exit(1)
 				return
 			}
 
 			req, err := http.NewRequestWithContext(ctx, "POST", fetch, bytes.NewBuffer(payload))
 			if err != nil {
-				log.Fatal("Error preparing fetch request:", err.Error())
+				fmt.Println("Error preparing fetch request:", err.Error())
+				os.Exit(1)
 				return
 			}
 
@@ -136,7 +139,8 @@ func download(ctx context.Context) *cobra.Command {
 
 			res, err := http.DefaultClient.Do(req)
 			if err != nil {
-				log.Fatal("Error creating fetch request:", err)
+				fmt.Println("Error creating fetch request:", err)
+				os.Exit(1)
 				return
 			}
 
@@ -144,13 +148,15 @@ func download(ctx context.Context) *cobra.Command {
 
 			var buffer bytes.Buffer
 			if _, err := buffer.ReadFrom(res.Body); err != nil {
-				log.Fatal(err)
+				fmt.Println(err)
+				os.Exit(1)
 				return
 			}
 
 			var result cliResponse
 			if err := json.Unmarshal(buffer.Bytes(), &result); err != nil {
-				log.Fatal("Error unmarshalling buffer:", err)
+				fmt.Println("Error unmarshalling buffer:", err)
+				os.Exit(1)
 				return
 			}
 
@@ -160,7 +166,8 @@ func download(ctx context.Context) *cobra.Command {
 
 			req, err = http.NewRequestWithContext(ctx, "GET", fmt.Sprintf(download, result.Data.Id), nil)
 			if err != nil {
-				log.Fatal("Error preparing download request:", err.Error())
+				fmt.Println("Error preparing download request:", err.Error())
+				os.Exit(1)
 				return
 			}
 

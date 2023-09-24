@@ -114,13 +114,13 @@ func main() {
 			default:
 				_, message, err := conn.ReadMessage()
 				if err != nil {
-					log.Println("Error reading message:", err)
+					fmt.Println(err.Error())
 					return
 				}
 
 				var progress progress
 				if err := json.Unmarshal(message, &progress); err != nil {
-					log.Println("Error unmarshalling message:", err)
+					fmt.Println("Error unmarshalling message:", err)
 					return
 				}
 
@@ -137,10 +137,15 @@ func main() {
 
 	go func() {
 		for {
-			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				log.Println(err.Error())
-				onError <- true
+			select {
+			case <-ctx.Done():
 				return
+			default:
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					fmt.Println(err.Error())
+					onError <- true
+					return
+				}
 			}
 		}
 	}()
@@ -161,7 +166,7 @@ func main() {
 
 func closeConn(conn *websocket.Conn) {
 	if err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); err != nil {
-		log.Println("Error sending close signal to server:", err)
+		fmt.Println("Error sending close signal to server:", err)
 		return
 	}
 }
