@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/vbauerster/mpb"
@@ -32,7 +35,38 @@ type (
 	}
 )
 
-const ws = "ws://localhost:9999/ws/cli"
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+const (
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+)
+
+var src = rand.NewSource(time.Now().UnixNano())
+
+func randID(n int) string {
+	sb := strings.Builder{}
+	sb.Grow(n)
+
+	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
+	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = src.Int63(), letterIdxMax
+		}
+		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+			sb.WriteByte(letterBytes[idx])
+			i--
+		}
+		cache >>= letterIdxBits
+		remain--
+	}
+
+	return sb.String()
+}
+
+var ID = randID(5)
+
+const ws = "ws://localhost:9999/ws/%s"
 
 func progressbar() progressBar {
 	return progressBar{
@@ -94,7 +128,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	conn, res, err := websocket.DefaultDialer.DialContext(ctx, ws, nil)
+	conn, res, err := websocket.DefaultDialer.DialContext(ctx, fmt.Sprintf(ws, ID), nil)
 	if err != nil {
 		log.Fatalf("Error dialing websocket: %v. Status courlde %d", err, res.StatusCode)
 		return
@@ -104,7 +138,6 @@ func main() {
 
 	progressBar := progressbar()
 	onError := make(chan bool)
-	// ping := time.NewTicker(time.Second)
 
 	go func() {
 		for {
@@ -135,17 +168,19 @@ func main() {
 		}
 	}()
 
+	ping := time.Tick(time.Second)
+
 	go func() {
 		for {
 			select {
-			case <-ctx.Done():
-				return
-			default:
+			case <-ping:
 				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 					fmt.Println(err.Error())
 					onError <- true
 					return
 				}
+			case <-ctx.Done():
+				return
 			}
 		}
 	}()
@@ -153,6 +188,7 @@ func main() {
 	for {
 		select {
 		case <-onError:
+			closeConn(conn)
 			return
 		case <-ctx.Done():
 			stopDownload()

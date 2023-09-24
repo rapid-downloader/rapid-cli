@@ -95,7 +95,7 @@ func executeCommand(ctx context.Context) {
 
 func download(ctx context.Context) *cobra.Command {
 	const fetch = "http://localhost:9999/fetch"
-	const download = "http://localhost:9999/cli/download/%s"
+	const download = "http://localhost:9999/%s/download/%s"
 
 	cmd := &cobra.Command{
 		Use:     "download",
@@ -164,7 +164,7 @@ func download(ctx context.Context) *cobra.Command {
 
 			fmt.Printf("Downloading %s (%s)\n\n\n", filepath.Base(result.Data.Location), parseSize(result.Data.Size))
 
-			req, err = http.NewRequestWithContext(ctx, "GET", fmt.Sprintf(download, result.Data.Id), nil)
+			req, err = http.NewRequestWithContext(ctx, "GET", fmt.Sprintf(download, ID, result.Data.Id), nil)
 			if err != nil {
 				fmt.Println("Error preparing download request:", err.Error())
 				os.Exit(1)
