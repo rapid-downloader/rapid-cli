@@ -36,11 +36,6 @@ type (
 		Cookies     []cookie `json:"cookies"`
 	}
 
-	cliResponse struct {
-		Status string `json:"status"`
-		Data   entry  `json:"data"`
-	}
-
 	entry struct {
 		Id               string `json:"id"`
 		Name             string `json:"name"`
@@ -153,18 +148,18 @@ func download(ctx context.Context) *cobra.Command {
 				return
 			}
 
-			var result cliResponse
+			var result entry
 			if err := json.Unmarshal(buffer.Bytes(), &result); err != nil {
 				fmt.Println("Error unmarshalling buffer:", err)
 				os.Exit(1)
 				return
 			}
 
-			store(result.Data.Id, result.Data)
+			store(result.Id, result)
 
-			fmt.Printf("Downloading %s (%s)\n\n\n", filepath.Base(result.Data.Location), parseSize(result.Data.Size))
+			fmt.Printf("Downloading %s (%s)\n\n\n", filepath.Base(result.Location), parseSize(result.Size))
 
-			req, err = http.NewRequestWithContext(ctx, "GET", fmt.Sprintf(download, ID, result.Data.Id), nil)
+			req, err = http.NewRequestWithContext(ctx, "GET", fmt.Sprintf(download, ID, result.Id), nil)
 			if err != nil {
 				fmt.Println("Error preparing download request:", err.Error())
 				os.Exit(1)
