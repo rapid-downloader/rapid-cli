@@ -107,7 +107,7 @@ func stopDownload() {
 		return
 	}
 
-	req, err := http.NewRequest("PUT", fmt.Sprintf(stop, entry.Id), nil)
+	req, err := http.NewRequest("PUT", fmt.Sprintf(stop, entry.ID), nil)
 	if err != nil {
 		log.Println("Error preparing stop request:", err)
 		return

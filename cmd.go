@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -37,33 +36,12 @@ type (
 	}
 
 	entry struct {
-		Id               string `json:"id"`
-		Name             string `json:"name"`
-		Location         string `json:"location"`
-		Size             int64  `json:"size"`
-		Filetype         string `json:"filetype"`
-		URL              string `json:"url"`
-		Resumable        bool   `json:"resumable"`
-		ChunkLen         int    `json:"chunkLen"`
-		DownloadProvider string `json:"downloadProvider"`
+		ID       string `json:"id"`
+		Name     string `json:"name"`
+		Size     int64  `json:"size"`
+		ChunkLen int    `json:"chunklen"`
 	}
 )
-
-func (e *entry) String() string {
-	var buffer bytes.Buffer
-
-	buffer.WriteString("==============================\n")
-	buffer.WriteString(fmt.Sprintf("ID: %v\n", e.Id))
-	buffer.WriteString(fmt.Sprintf("Name: %v\n", e.Name))
-	buffer.WriteString(fmt.Sprintf("Location: %v\n", e.Location))
-	buffer.WriteString(fmt.Sprintf("Size: %v\n", e.Size))
-	buffer.WriteString(fmt.Sprintf("Filetype: %v\n", e.Filetype))
-	buffer.WriteString(fmt.Sprintf("Resumable: %v\n", e.Resumable))
-	buffer.WriteString(fmt.Sprintf("Total Chunks: %v\n", e.ChunkLen))
-	buffer.WriteString("==============================\n")
-
-	return buffer.String()
-}
 
 var cmds = make([]commandFunc, 0)
 
@@ -155,11 +133,11 @@ func download(ctx context.Context) *cobra.Command {
 				return
 			}
 
-			store(result.Id, result)
+			store(result.ID, result)
 
-			fmt.Printf("Downloading %s (%s)\n\n\n", filepath.Base(result.Location), parseSize(result.Size))
+			fmt.Printf("Downloading %s (%s)\n\n\n", result.Name, parseSize(result.Size))
 
-			req, err = http.NewRequestWithContext(ctx, "GET", fmt.Sprintf(download, ID, result.Id), nil)
+			req, err = http.NewRequestWithContext(ctx, "GET", fmt.Sprintf(download, ID, result.ID), nil)
 			if err != nil {
 				fmt.Println("Error preparing download request:", err.Error())
 				os.Exit(1)
