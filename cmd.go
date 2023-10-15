@@ -89,7 +89,7 @@ func executeCommand(ctx context.Context) {
 }
 
 func download(ctx context.Context) *cobra.Command {
-	const fetch = "http://localhost:9999/%s/fetch"
+	const fetch = "http://localhost:9999/fetch"
 	const download = "http://localhost:9999/%s/download/%s"
 
 	cmd := &cobra.Command{
@@ -123,7 +123,7 @@ func download(ctx context.Context) *cobra.Command {
 				return
 			}
 
-			req, err := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf(fetch, ID), bytes.NewBuffer(payload))
+			req, err := http.NewRequestWithContext(ctx, "POST", fetch, bytes.NewBuffer(payload))
 			if err != nil {
 				fmt.Println("Error preparing fetch request:", err.Error())
 				os.Exit(1)
